@@ -26,6 +26,7 @@ import string
 import sys
 import time
 import urllib2
+import poll
 
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -94,7 +95,7 @@ class Parametres(BaseModel):
     spam_limit = peewee.IntegerField()                  # limite en secondes entre chaque message
     current_friend = peewee.ForeignKeyField(Pseudo, related_name='actuel')      # ami actuel
     prev_friend = peewee.ForeignKeyField(Pseudo, related_name='precedent')      # ami précédent
-    channel = peewee.CharField(primary_key=True)                        # chan actuel
+    channel = peewee.CharField(primary_key=True, max_length=100)                        # chan actuel
 
 
 class DongerBot(SingleServerIRCBot):
@@ -105,6 +106,8 @@ class DongerBot(SingleServerIRCBot):
                                     nick,
                                     nick, True)
 
+
+        self.poller = poll.Poller()
         self.auteur = None
         self.current_channel = cfg.server['channel']
         self.settings = Parametres.get(channel=self.current_channel)
@@ -331,6 +334,21 @@ class DongerBot(SingleServerIRCBot):
 
         return message
 
+    def poll(self, reste):
+        return self.poller.makePoll(self.auteur, reste)
+
+    def vote(self, reste):
+        if reste is None:
+            return "Syntax: !vote 'this is the question?' option_1 'option 2'"
+        opts = reste.split()
+        return self.poller.voteFor(self.auteur['fn'], opts[0], reste)
+
+    def getPollResult(self, reste):
+        return self.poller.getResult(reste)
+
+    def closePoll(self, reste):
+        pass
+
     def get_current_friend_time(self, friend=None):
         """ Récup le temps de l'ami """
         try:
@@ -511,7 +529,7 @@ class DongerBot(SingleServerIRCBot):
                     # Rajout dans le filtre
                     self.last_uses[self.auteur['fn']] = time.time()
                 else:
-                    if int(round(time.time() - self.last_uses[self.auteur['fn']])) < int(self.settings.spam_limit):
+                    if False:
                         # uhn = ["uhn 😩", "mmm 😌"]
                         # self.send_pub_msg(connection, uhn[random.randint(0, len(uhn) - 1)])
                         # self.send_pub_msg(connection, "rien")
@@ -578,6 +596,13 @@ class DongerBot(SingleServerIRCBot):
             if commande.lower() == "friends":
                 # Partie Friends / get_friends
                 envoi_message = self.get_friends(reste)
+
+            if commande.lower() == "sondage":
+                envoi_message = self.poll(reste)
+            if commande.lower() == "vote":
+                envoi_message = self.vote(reste)
+            if commande.lower() == "sondage_resultat":
+                envoi_message = self.getPollResult(reste)
 
             if commande.lower() == cfg.super_secret_command:
                 # Partie commande secrete
